@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:media_kit/media_kit.dart';
 import 'package:media_kit_video/media_kit_video.dart';
+import 'package:veloxon/videoplayer/gradient_slider.dart';
 
 class VeloxonPlayer extends StatefulWidget {
   final VideoController controller;
@@ -26,11 +28,12 @@ class _VeloxonPlayerState extends State<VeloxonPlayer> {
         children: [
           Video(controller: widget.controller, controls: NoVideoControls),
 
-          if (_isControlsVisible)
-            VeloxonControls(
-              controller: widget.controller,
-              onHide: () => setState(() => _isControlsVisible = false),
-            ),
+          // OPRAVA: IgnorePointer musí být až uvnitř VeloxonControls
+          VeloxonControls(
+            controller: widget.controller,
+            isVisible: _isControlsVisible,
+            onHide: () => setState(() => _isControlsVisible = false),
+          ),
         ],
       ),
     );
@@ -39,11 +42,13 @@ class _VeloxonPlayerState extends State<VeloxonPlayer> {
 
 class VeloxonControls extends StatefulWidget {
   final VideoController controller;
+  final bool isVisible;
   final VoidCallback onHide;
 
   const VeloxonControls({
     super.key,
     required this.controller,
+    required this.isVisible,
     required this.onHide,
   });
 
@@ -57,30 +62,39 @@ class _VeloxonControlsState extends State<VeloxonControls> {
   @override
   Widget build(BuildContext context) {
     return Positioned.fill(
-      child: Container(
-        decoration: BoxDecoration(
-          gradient: LinearGradient(
-            begin: Alignment.topCenter,
-            end: Alignment.bottomCenter,
-            colors: [
-              Colors.black.withValues(alpha: 0.7),
-              Colors.transparent,
-              Colors.black.withValues(alpha: 0.9),
-            ],
-            stops: [0.0, 0.5, 1.0],
+      child: AnimatedOpacity(
+        opacity: widget.isVisible ? 1.0 : 0.0,
+        duration: Duration(milliseconds: 200),
+        child: IgnorePointer(
+          ignoring: !widget.isVisible,
+          child: Container(
+            decoration: BoxDecoration(
+              gradient: LinearGradient(
+                begin: Alignment.topCenter,
+                end: Alignment.bottomCenter,
+                colors: [
+                  Colors.black.withValues(alpha: 0.5),
+                  Colors.black.withValues(alpha: 0.1),
+                  Colors.transparent,
+                  Colors.black.withValues(alpha: 0.2),
+                  Colors.black.withValues(alpha: 0.9),
+                ],
+                stops: [0.0, 0.1, 0.5, 0.75, 1.0],
+              ),
+            ),
+            child: Column(
+              children: [
+                // Top bar
+                _buildTopBar(),
+
+                // Center controls
+                Expanded(child: Center(child: _buildCenterControls())),
+
+                // Bottom bar
+                _buildBottomBar(),
+              ],
+            ),
           ),
-        ),
-        child: Stack(
-          children: [
-            // Top bar
-            Positioned(top: 0, left: 0, right: 0, child: _buildTopBar()),
-
-            // Center controls
-            Center(child: _buildCenterControls()),
-
-            // Bottom bar
-            Positioned(bottom: 0, left: 0, right: 0, child: _buildBottomBar()),
-          ],
         ),
       ),
     );
@@ -167,6 +181,8 @@ class _VeloxonControlsState extends State<VeloxonControls> {
                     final value = duration.inMilliseconds > 0
                         ? position.inMilliseconds / duration.inMilliseconds
                         : 0.0;
+                    double hoverValue = 0.0;
+                    bool isHovering = false;
 
                     return Column(
                       mainAxisSize: MainAxisSize.min,
@@ -174,16 +190,21 @@ class _VeloxonControlsState extends State<VeloxonControls> {
                         SliderTheme(
                           data: SliderThemeData(
                             trackHeight: 3.0,
+                            trackShape: GradientRectSliderTrackShape(
+                              gradient: LinearGradient(
+                                colors: [Color(0xff72c0ff), Color(0xff0090fc)],
+                              ),
+                            ),
                             thumbShape: RoundSliderThumbShape(
                               enabledThumbRadius: 6.0,
                             ),
                             overlayShape: RoundSliderOverlayShape(
                               overlayRadius: 14.0,
                             ),
-                            activeTrackColor: Colors.blue,
+                            activeTrackColor: Color(0xff0090fc),
                             inactiveTrackColor: Colors.white.withAlpha(30),
-                            thumbColor: Colors.blue,
-                            overlayColor: Colors.blue.withAlpha(30),
+                            thumbColor: Color(0xff0090fc),
+                            overlayColor: Color(0xff0090fc).withAlpha(30),
                           ),
                           child: Slider(
                             value: value.clamp(0.0, 1.0),
@@ -195,6 +216,7 @@ class _VeloxonControlsState extends State<VeloxonControls> {
                               );
                               player.seek(newPosition);
                             },
+                            secondaryTrackValue: hoverValue,
                           ),
                         ),
                         Padding(
@@ -305,21 +327,36 @@ class _VeloxonControlsState extends State<VeloxonControls> {
   void _showSpeedMenu(Player player) {
     showModalBottomSheet(
       context: context,
+      // OPRAVA: Přidáno constraints pro správné zobrazení
+      constraints: BoxConstraints(
+        maxHeight: MediaQuery.of(context).size.height * 0.5,
+      ),
       builder: (context) {
         final speeds = [0.25, 0.5, 0.75, 1.0, 1.25, 1.5, 1.75, 2.0];
-        return Container(
-          padding: const EdgeInsets.all(16),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: speeds.map((speed) {
-              return ListTile(
-                title: Text('${speed}x'),
-                onTap: () {
-                  player.setRate(speed);
-                  Navigator.pop(context);
-                },
-              );
-            }).toList(),
+        return SafeArea(
+          child: SingleChildScrollView(
+            child: Container(
+              padding: const EdgeInsets.all(16),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(
+                    'Rychlost přehrávání',
+                    style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                  ),
+                  SizedBox(height: 8),
+                  ...speeds.map((speed) {
+                    return ListTile(
+                      title: Text('${speed}x'),
+                      onTap: () {
+                        player.setRate(speed);
+                        Navigator.pop(context);
+                      },
+                    );
+                  }),
+                ],
+              ),
+            ),
           ),
         );
       },

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:media_kit/media_kit.dart'; // Provides [Player], [Media], [Playlist] etc.
-import 'package:media_kit_video/media_kit_video.dart'; // Provides [VideoController] & [Video] etc.
+import 'package:media_kit_video/media_kit_video.dart';
+import 'package:veloxon/videoplayer/veloxon_controls.dart'; // Provides [VideoController] & [Video] etc.
 
 void main() {
   WidgetsFlutterBinding.ensureInitialized();
@@ -10,7 +11,7 @@ void main() {
 }
 
 class MyScreen extends StatefulWidget {
-  const MyScreen({Key? key}) : super(key: key);
+  const MyScreen({super.key});
   @override
   State<MyScreen> createState() => MyScreenState();
 }
@@ -40,12 +41,14 @@ class MyScreenState extends State<MyScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return Center(
-      child: SizedBox(
-        width: MediaQuery.of(context).size.width,
-        height: MediaQuery.of(context).size.width * 9.0 / 16.0,
-        // Use [Video] widget to display video output.
-        child: Video(controller: controller),
+    return Scaffold(
+      body: Center(
+        child: SizedBox(
+          width: MediaQuery.of(context).size.width,
+          height: MediaQuery.of(context).size.width * 9.0 / 16.0,
+          // Use [Video] widget to display video output.
+          child: VeloxonPlayer(controller: controller),
+        ),
       ),
     );
   }
