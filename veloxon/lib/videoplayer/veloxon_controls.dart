@@ -295,7 +295,7 @@ class _VeloxonControlsState extends State<VeloxonControls> {
                               } else {
                                 volume = _previousVolume;
                               }
-                              player.setVolume(volume * 100); // Převod na 0-100
+                              player.setVolume(volume * 100);
                             });
                           },
                           icon: Icon(
