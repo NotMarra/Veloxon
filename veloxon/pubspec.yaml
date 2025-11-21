@@ -37,6 +37,8 @@ dependencies:
   media_kit: ^1.2.2
   media_kit_video: ^2.0.0
   media_kit_libs_video: ^1.0.7
+  lucide_icons_flutter: ^3.1.6
+  window_manager: ^0.5.1
 
 dev_dependencies:
   flutter_test:

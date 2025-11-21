@@ -1,8 +1,11 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
+import 'package:lucide_icons_flutter/lucide_icons.dart';
 import 'package:media_kit/media_kit.dart';
 import 'package:media_kit_video/media_kit_video.dart';
 import 'package:veloxon/videoplayer/gradient_slider.dart';
+import 'package:window_manager/window_manager.dart';
 
 class VeloxonPlayer extends StatefulWidget {
   final VideoController controller;
@@ -14,27 +17,58 @@ class VeloxonPlayer extends StatefulWidget {
 }
 
 class _VeloxonPlayerState extends State<VeloxonPlayer> {
+  Player get player => widget.controller.player;
   bool _isControlsVisible = true;
+  bool _hideCursor = false;
+  Timer? _hideTimer;
+
+  void _restartHideTimer() {
+    _hideTimer?.cancel();
+    _isControlsVisible = true;
+    _hideCursor = false;
+
+    _hideTimer = Timer(const Duration(seconds: 3), () {
+      setState(() {
+        _isControlsVisible = false;
+        _hideCursor = true;
+      });
+    });
+
+    setState(() {});
+  }
+
+  @override
+  void dispose() {
+    _hideTimer?.cancel();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
     return GestureDetector(
       onTap: () {
         setState(() {
-          _isControlsVisible = !_isControlsVisible;
+          player.playOrPause();
         });
       },
-      child: Stack(
-        children: [
-          Video(controller: widget.controller, controls: NoVideoControls),
+      child: MouseRegion(
+        onHover: (_) => _restartHideTimer(),
+        onEnter: (_) => _restartHideTimer(),
+        onExit: (_) => _isControlsVisible = false,
+        cursor: _hideCursor
+            ? SystemMouseCursors.none
+            : SystemMouseCursors.basic,
+        child: Stack(
+          children: [
+            Video(controller: widget.controller, controls: NoVideoControls),
 
-          // OPRAVA: IgnorePointer musí být až uvnitř VeloxonControls
-          VeloxonControls(
-            controller: widget.controller,
-            isVisible: _isControlsVisible,
-            onHide: () => setState(() => _isControlsVisible = false),
-          ),
-        ],
+            VeloxonControls(
+              controller: widget.controller,
+              isVisible: _isControlsVisible,
+              onHide: () => setState(() => _isControlsVisible = false),
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -58,6 +92,7 @@ class VeloxonControls extends StatefulWidget {
 
 class _VeloxonControlsState extends State<VeloxonControls> {
   Player get player => widget.controller.player;
+  bool _isFullscreen = false;
 
   @override
   Widget build(BuildContext context) {
@@ -108,14 +143,9 @@ class _VeloxonControlsState extends State<VeloxonControls> {
           children: [
             IconButton(
               onPressed: () => Navigator.of(context).maybePop(),
-              icon: Icon(Icons.arrow_back, color: Colors.white, size: 28),
+              icon: Icon(LucideIcons.arrowLeft, color: Colors.white, size: 28),
             ),
             Spacer(),
-            IconButton(
-              onPressed: () => Navigator.of(context).maybePop(),
-              icon: Icon(Icons.more_vert, color: Colors.white, size: 28),
-            ),
-            //TODO: basic info about video
           ],
         ),
       ),
@@ -123,44 +153,7 @@ class _VeloxonControlsState extends State<VeloxonControls> {
   }
 
   Widget _buildCenterControls() {
-    return StreamBuilder<bool>(
-      stream: player.stream.playing,
-      builder: (context, snapshot) {
-        final isPlaying = snapshot.data ?? false;
-
-        return Row(
-          mainAxisAlignment: MainAxisAlignment.center,
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            _buildControlButton(
-              icon: Icons.replay_10,
-              onPressed: () async {
-                final position = await player.stream.position.first;
-                await player.seek(position - Duration(seconds: 10));
-              },
-            ),
-
-            SizedBox(width: 40),
-
-            _buildControlButton(
-              icon: isPlaying ? Icons.pause : Icons.play_arrow,
-              size: 80,
-              onPressed: () => player.playOrPause(),
-            ),
-
-            SizedBox(width: 40),
-
-            _buildControlButton(
-              icon: Icons.forward_10,
-              onPressed: () async {
-                final position = await player.stream.position.first;
-                await player.seek(position + Duration(seconds: 10));
-              },
-            ),
-          ],
-        );
-      },
-    );
+    return Column();
   }
 
   Widget _buildBottomBar() {
@@ -181,8 +174,6 @@ class _VeloxonControlsState extends State<VeloxonControls> {
                     final value = duration.inMilliseconds > 0
                         ? position.inMilliseconds / duration.inMilliseconds
                         : 0.0;
-                    double hoverValue = 0.0;
-                    bool isHovering = false;
 
                     return Column(
                       mainAxisSize: MainAxisSize.min,
@@ -216,7 +207,6 @@ class _VeloxonControlsState extends State<VeloxonControls> {
                               );
                               player.seek(newPosition);
                             },
-                            secondaryTrackValue: hoverValue,
                           ),
                         ),
                         Padding(
@@ -252,6 +242,39 @@ class _VeloxonControlsState extends State<VeloxonControls> {
 
             Row(
               children: [
+                StreamBuilder<bool>(
+                  stream: player.stream.playing,
+                  builder: (context, snapshot) {
+                    final isPlaying = snapshot.data ?? false;
+
+                    return Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        _buildControlButton(
+                          icon: LucideIcons.stepBack,
+                          onPressed: () async {
+                            final position = await player.stream.position.first;
+                            await player.seek(position - Duration(seconds: 10));
+                          },
+                        ),
+                        _buildControlButton(
+                          icon: isPlaying
+                              ? LucideIcons.pause
+                              : LucideIcons.play,
+                          onPressed: () => player.playOrPause(),
+                        ),
+                        _buildControlButton(
+                          icon: LucideIcons.stepForward,
+                          onPressed: () async {
+                            final position = await player.stream.position.first;
+                            await player.seek(position + Duration(seconds: 10));
+                          },
+                        ),
+                      ],
+                    );
+                  },
+                ),
                 StreamBuilder(
                   stream: player.stream.volume,
                   builder: (context, snapshot) {
@@ -262,7 +285,7 @@ class _VeloxonControlsState extends State<VeloxonControls> {
                         player.setVolume(volume > 0 ? 0 : 100);
                       },
                       icon: Icon(
-                        volume > 0 ? Icons.volume_up : Icons.volume_off,
+                        volume > 0 ? LucideIcons.volume2 : LucideIcons.volumeX,
                         color: Colors.white,
                       ),
                     );
@@ -275,12 +298,15 @@ class _VeloxonControlsState extends State<VeloxonControls> {
 
                 IconButton(
                   onPressed: null, //TODO:settings
-                  icon: Icon(Icons.settings, color: Colors.white),
+                  icon: Icon(LucideIcons.settings, color: Colors.white),
                 ),
 
                 IconButton(
-                  onPressed: null,
-                  icon: Icon(Icons.fullscreen, color: Colors.white),
+                  onPressed: _toggleFullscreen,
+                  icon: Icon(
+                    _isFullscreen ? LucideIcons.minimize : LucideIcons.maximize,
+                    color: Colors.white,
+                  ),
                 ),
               ],
             ),
@@ -293,19 +319,10 @@ class _VeloxonControlsState extends State<VeloxonControls> {
   Widget _buildControlButton({
     required IconData icon,
     required VoidCallback onPressed,
-    double size = 56,
   }) {
-    return Container(
-      decoration: BoxDecoration(
-        color: Colors.black.withValues(alpha: 0.5),
-        shape: BoxShape.circle,
-      ),
-      child: IconButton(
-        onPressed: onPressed,
-        icon: Icon(icon, color: Colors.white),
-        iconSize: size * 0.6,
-        padding: EdgeInsets.all(size * 0.2),
-      ),
+    return IconButton(
+      onPressed: onPressed,
+      icon: Icon(icon, color: Colors.white),
     );
   }
 
@@ -373,5 +390,17 @@ class _VeloxonControlsState extends State<VeloxonControls> {
       return '$hours:${twoDigits(minutes)}:${twoDigits(seconds)}';
     }
     return '${twoDigits(minutes)}:${twoDigits(seconds)}';
+  }
+
+  Future<void> _toggleFullscreen() async {
+    _isFullscreen = !_isFullscreen;
+
+    if (_isFullscreen) {
+      await windowManager.setFullScreen(true);
+    } else {
+      await windowManager.setFullScreen(false);
+    }
+
+    setState(() {});
   }
 }

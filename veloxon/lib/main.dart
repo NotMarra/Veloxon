@@ -1,10 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:media_kit/media_kit.dart'; // Provides [Player], [Media], [Playlist] etc.
 import 'package:media_kit_video/media_kit_video.dart';
-import 'package:veloxon/videoplayer/veloxon_controls.dart'; // Provides [VideoController] & [Video] etc.
+import 'package:veloxon/videoplayer/veloxon_controls.dart';
+import 'package:window_manager/window_manager.dart'; // Provides [VideoController] & [Video] etc.
 
-void main() {
+void main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  await windowManager.ensureInitialized();
   // Necessary initialization for package:media_kit.
   MediaKit.ensureInitialized();
   runApp(const MaterialApp(home: MyScreen()));
@@ -28,7 +30,7 @@ class MyScreenState extends State<MyScreen> {
     // Play a [Media] or [Playlist].
     player.open(
       Media(
-        'https://cdn.plyr.io/static/demo/View_From_A_Blue_Moon_Trailer-1080p.mp4',
+        'https://user-images.githubusercontent.com/28951144/229373695-22f88f13-d18f-4288-9bf1-c3e078d83722.mp4',
       ),
     );
   }
