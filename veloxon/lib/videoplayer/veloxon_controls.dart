@@ -51,6 +51,7 @@ class _VeloxonPlayerState extends State<VeloxonPlayer> {
           player.playOrPause();
         });
       },
+      onPanUpdate: (_) => _restartHideTimer(),
       child: MouseRegion(
         onHover: (_) => _restartHideTimer(),
         onEnter: (_) => _restartHideTimer(),
@@ -66,6 +67,7 @@ class _VeloxonPlayerState extends State<VeloxonPlayer> {
               controller: widget.controller,
               isVisible: _isControlsVisible,
               onHide: () => setState(() => _isControlsVisible = false),
+              restartHideTimer: _restartHideTimer,
             ),
           ],
         ),
@@ -78,12 +80,14 @@ class VeloxonControls extends StatefulWidget {
   final VideoController controller;
   final bool isVisible;
   final VoidCallback onHide;
+  final VoidCallback restartHideTimer;
 
   const VeloxonControls({
     super.key,
     required this.controller,
     required this.isVisible,
     required this.onHide,
+    required this.restartHideTimer,
   });
 
   @override
@@ -201,6 +205,7 @@ class _VeloxonControlsState extends State<VeloxonControls> {
                           child: Slider(
                             value: value.clamp(0.0, 1.0),
                             onChanged: (newValue) {
+                              widget.restartHideTimer();
                               final newPosition = Duration(
                                 milliseconds:
                                     (newValue * duration.inMilliseconds)
@@ -327,12 +332,13 @@ class _VeloxonControlsState extends State<VeloxonControls> {
                               activeTrackColor: Color(0xff0090fc),
                               inactiveTrackColor: Colors.white.withAlpha(30),
                               thumbColor: Color(0xff0090fc),
-                              overlayColor: Color(0xff0090fc).withAlpha(30),
+                              overlayColor: Color(0x1e0090fc),
                             ),
                             child: Slider(
                               value: volume.clamp(0.0, 1.0),
                               onChanged: (newValue) {
                                 setState(() {
+                                  widget.restartHideTimer();
                                   volume = newValue;
                                   if (newValue > 0) {
                                     _previousVolume = newValue;
