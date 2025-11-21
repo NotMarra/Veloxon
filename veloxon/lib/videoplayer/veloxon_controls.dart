@@ -93,6 +93,7 @@ class VeloxonControls extends StatefulWidget {
 class _VeloxonControlsState extends State<VeloxonControls> {
   Player get player => widget.controller.player;
   bool _isFullscreen = false;
+  double _previousVolume = 1.0;
 
   @override
   Widget build(BuildContext context) {
@@ -278,16 +279,71 @@ class _VeloxonControlsState extends State<VeloxonControls> {
                 StreamBuilder(
                   stream: player.stream.volume,
                   builder: (context, snapshot) {
-                    final volume = snapshot.data ?? 100.0;
+                    double volumeRaw = snapshot.data ?? 100.0;
+                    double volume = volumeRaw / 100;
 
-                    return IconButton(
-                      onPressed: () {
-                        player.setVolume(volume > 0 ? 0 : 100);
-                      },
-                      icon: Icon(
-                        volume > 0 ? LucideIcons.volume2 : LucideIcons.volumeX,
-                        color: Colors.white,
-                      ),
+                    return Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        IconButton(
+                          onPressed: () {
+                            setState(() {
+                              if (volume > 0) {
+                                _previousVolume = volume;
+                                volume = 0.0;
+                              } else {
+                                volume = _previousVolume;
+                              }
+                              player.setVolume(volume * 100); // Převod na 0-100
+                            });
+                          },
+                          icon: Icon(
+                            volume > 0
+                                ? LucideIcons.volume2
+                                : LucideIcons.volumeX,
+                            color: Colors.white,
+                          ),
+                        ),
+                        SizedBox(
+                          width: 120,
+                          child: SliderTheme(
+                            data: SliderThemeData(
+                              trackHeight: 3.0,
+                              trackShape: GradientRectSliderTrackShape(
+                                gradient: LinearGradient(
+                                  colors: [
+                                    Color(0xff72c0ff),
+                                    Color(0xff0090fc),
+                                  ],
+                                ),
+                              ),
+                              thumbShape: RoundSliderThumbShape(
+                                enabledThumbRadius: 6.0,
+                              ),
+                              overlayShape: RoundSliderOverlayShape(
+                                overlayRadius: 14.0,
+                              ),
+                              activeTrackColor: Color(0xff0090fc),
+                              inactiveTrackColor: Colors.white.withAlpha(30),
+                              thumbColor: Color(0xff0090fc),
+                              overlayColor: Color(0xff0090fc).withAlpha(30),
+                            ),
+                            child: Slider(
+                              value: volume.clamp(0.0, 1.0),
+                              onChanged: (newValue) {
+                                setState(() {
+                                  volume = newValue;
+                                  if (newValue > 0) {
+                                    _previousVolume = newValue;
+                                  }
+                                  player.setVolume(volume * 100);
+                                });
+                              },
+                            ),
+                          ),
+                        ),
+                      ],
                     );
                   },
                 ),
