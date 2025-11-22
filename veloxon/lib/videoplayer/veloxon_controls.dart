@@ -312,40 +312,52 @@ class _VeloxonControlsState extends State<VeloxonControls> {
                         ),
                         SizedBox(
                           width: 120,
-                          child: SliderTheme(
-                            data: SliderThemeData(
-                              trackHeight: 3.0,
-                              trackShape: GradientRectSliderTrackShape(
-                                gradient: LinearGradient(
-                                  colors: [
-                                    Color(0xff72c0ff),
-                                    Color(0xff0090fc),
-                                  ],
-                                ),
-                              ),
-                              thumbShape: RoundSliderThumbShape(
-                                enabledThumbRadius: 6.0,
-                              ),
-                              overlayShape: RoundSliderOverlayShape(
-                                overlayRadius: 14.0,
-                              ),
-                              activeTrackColor: Color(0xff0090fc),
-                              inactiveTrackColor: Colors.white.withAlpha(30),
-                              thumbColor: Color(0xff0090fc),
-                              overlayColor: Color(0x1e0090fc),
+                          child: Tooltip(
+                            message: "${(volume * 100).toInt()}%",
+                            enableTapToDismiss: false,
+                            exitDuration: Duration(seconds: 0),
+                            waitDuration: Duration(seconds: 0),
+                            ignorePointer: true,
+                            decoration: BoxDecoration(
+                              color: Colors.white.withValues(alpha: 0.1),
+                              borderRadius: BorderRadius.circular(5),
                             ),
-                            child: Slider(
-                              value: volume.clamp(0.0, 1.0),
-                              onChanged: (newValue) {
-                                setState(() {
-                                  widget.restartHideTimer();
-                                  volume = newValue;
-                                  if (newValue > 0) {
-                                    _previousVolume = newValue;
-                                  }
-                                  player.setVolume(volume * 100);
-                                });
-                              },
+                            textStyle: TextStyle(color: Colors.white),
+                            child: SliderTheme(
+                              data: SliderThemeData(
+                                trackHeight: 3.0,
+                                trackShape: GradientRectSliderTrackShape(
+                                  gradient: LinearGradient(
+                                    colors: [
+                                      Color(0xff72c0ff),
+                                      Color(0xff0090fc),
+                                    ],
+                                  ),
+                                ),
+                                thumbShape: RoundSliderThumbShape(
+                                  enabledThumbRadius: 6.0,
+                                ),
+                                overlayShape: RoundSliderOverlayShape(
+                                  overlayRadius: 14.0,
+                                ),
+                                activeTrackColor: Color(0xff0090fc),
+                                inactiveTrackColor: Colors.white.withAlpha(30),
+                                thumbColor: Color(0xff0090fc),
+                                overlayColor: Color(0x1e0090fc),
+                              ),
+                              child: Slider(
+                                value: volume.clamp(0.0, 1.0),
+                                onChanged: (newValue) {
+                                  setState(() {
+                                    widget.restartHideTimer();
+                                    volume = newValue;
+                                    if (newValue > 0) {
+                                      _previousVolume = newValue;
+                                    }
+                                    player.setVolume(volume * 100);
+                                  });
+                                },
+                              ),
                             ),
                           ),
                         ),
@@ -393,54 +405,78 @@ class _VeloxonControlsState extends State<VeloxonControls> {
       stream: player.stream.rate,
       builder: (context, snapshot) {
         final rate = snapshot.data ?? 1.0;
-        return TextButton(
-          onPressed: () {
-            _showSpeedMenu(player);
-          },
-          child: Text('${rate}x', style: const TextStyle(color: Colors.white)),
+        final speeds = [0.25, 0.5, 0.75, 1.0, 1.25, 1.5, 1.75, 2.0];
+        return MenuAnchor(
+          builder:
+              (BuildContext bCon, MenuController controller, Widget? child) {
+                return TextButton(
+                  onPressed: () {
+                    if (controller.isOpen) {
+                      controller.close();
+                    } else {
+                      controller.open();
+                    }
+                  },
+                  child: Text(
+                    '${rate}x',
+                    style: const TextStyle(color: Colors.white),
+                  ),
+                );
+              },
+          menuChildren: List<MenuItemButton>.generate(
+            speeds.length,
+            (int index) => MenuItemButton(
+              onPressed: () => setState(() => speeds[index]),
+              child: Text("${speeds[index]}x"),
+            ),
+          ),
         );
+        // return TextButton(
+        //   onPressed: () {
+        //     _showSpeedMenu(player);
+        //   },
+        //   child: Text('${rate}x', style: const TextStyle(color: Colors.white)),
+        // );
       },
     );
   }
 
-  void _showSpeedMenu(Player player) {
-    showModalBottomSheet(
-      context: context,
-      // OPRAVA: Přidáno constraints pro správné zobrazení
-      constraints: BoxConstraints(
-        maxHeight: MediaQuery.of(context).size.height * 0.5,
-      ),
-      builder: (context) {
-        final speeds = [0.25, 0.5, 0.75, 1.0, 1.25, 1.5, 1.75, 2.0];
-        return SafeArea(
-          child: SingleChildScrollView(
-            child: Container(
-              padding: const EdgeInsets.all(16),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Text(
-                    'Rychlost přehrávání',
-                    style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-                  ),
-                  SizedBox(height: 8),
-                  ...speeds.map((speed) {
-                    return ListTile(
-                      title: Text('${speed}x'),
-                      onTap: () {
-                        player.setRate(speed);
-                        Navigator.pop(context);
-                      },
-                    );
-                  }),
-                ],
-              ),
-            ),
-          ),
-        );
-      },
-    );
-  }
+  // void _showSpeedMenu(Player player) {
+  //   showModalBottomSheet(
+  //     context: context,
+  //     constraints: BoxConstraints(
+  //       maxHeight: MediaQuery.of(context).size.height * 0.5,
+  //     ),
+  //     builder: (context) {
+  //       // return SafeArea(
+  //       //   child: SingleChildScrollView(
+  //       //     child: Container(
+  //       //       padding: const EdgeInsets.all(16),
+  //       //       child: Column(
+  //       //         mainAxisSize: MainAxisSize.min,
+  //       //         children: [
+  //       //           Text(
+  //       //             'Rychlost přehrávání',
+  //       //             style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+  //       //           ),
+  //       //           SizedBox(height: 8),
+  //       //           ...speeds.map((speed) {
+  //       //             return ListTile(
+  //       //               title: Text('${speed}x'),
+  //       //               onTap: () {
+  //       //                 player.setRate(speed);
+  //       //                 Navigator.pop(context);
+  //       //               },
+  //       //             );
+  //       //           }),
+  //       //         ],
+  //       //       ),
+  //       //     ),
+  //       //   ),
+  //       // );
+  //     },
+  //   );
+  // }
 
   String _formatDuration(Duration duration) {
     String twoDigits(int n) => n.toString().padLeft(2, '0');

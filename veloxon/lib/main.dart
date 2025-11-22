@@ -9,7 +9,8 @@ void main() async {
   await windowManager.ensureInitialized();
   // Necessary initialization for package:media_kit.
   MediaKit.ensureInitialized();
-  runApp(const MaterialApp(home: MyScreen()));
+
+  runApp(MaterialApp(home: const MyScreen(), theme: ThemeData.dark()));
 }
 
 class MyScreen extends StatefulWidget {
