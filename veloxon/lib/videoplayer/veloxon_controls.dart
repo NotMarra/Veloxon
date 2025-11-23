@@ -71,7 +71,31 @@ class _VeloxonPlayerState extends State<VeloxonPlayer> {
             : SystemMouseCursors.basic,
         child: Stack(
           children: [
-            Video(controller: widget.controller, controls: NoVideoControls),
+            Video(
+              controller: widget.controller,
+              controls: NoVideoControls,
+              subtitleViewConfiguration: SubtitleViewConfiguration(
+                style: const TextStyle(
+                  fontSize: 32,
+                  color: Colors.white,
+                  fontWeight: FontWeight.bold,
+                  shadows: [
+                    Shadow(
+                      offset: Offset(1.5, 1.5),
+                      blurRadius: 4.0,
+                      color: Colors.black,
+                    ),
+                    Shadow(
+                      offset: Offset(-1.5, -1.5),
+                      blurRadius: 4.0,
+                      color: Colors.black,
+                    ),
+                  ],
+                ),
+                padding: const EdgeInsets.only(left: 40, right: 40, bottom: 80),
+                textAlign: TextAlign.center,
+              ),
+            ),
             VeloxonControls(
               controller: widget.controller,
               isVisible: _isControlsVisible,
@@ -157,9 +181,13 @@ class _VeloxonControlsState extends State<VeloxonControls> {
     _isFullscreen = !_isFullscreen;
 
     if (_isFullscreen) {
+      // Skrýt title bar a maximalizovat okno
+      await windowManager.setTitleBarStyle(TitleBarStyle.hidden);
       await windowManager.setFullScreen(true);
     } else {
+      // Vrátit title bar a zrušit fullscreen
       await windowManager.setFullScreen(false);
+      await windowManager.setTitleBarStyle(TitleBarStyle.normal);
     }
 
     setState(() {});

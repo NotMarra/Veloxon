@@ -8,6 +8,8 @@ class VeloxonMenuAnchor<T> extends StatefulWidget {
   final ValueChanged<T> onChanged;
   final TextStyle? labelStyle;
   final ValueChanged<MenuController>? onControllerCreated;
+  final VoidCallback? onOpen;
+  final VoidCallback? onClose;
 
   const VeloxonMenuAnchor({
     super.key,
@@ -17,6 +19,8 @@ class VeloxonMenuAnchor<T> extends StatefulWidget {
     required this.onChanged,
     this.labelStyle,
     this.onControllerCreated,
+    this.onOpen,
+    this.onClose,
   });
 
   @override
@@ -28,20 +32,28 @@ class _VeloxonMenuAnchorState<T> extends State<VeloxonMenuAnchor<T>> {
 
   @override
   Widget build(BuildContext context) {
+    final screenHeight = MediaQuery.of(context).size.height;
+    final maxMenuHeight = screenHeight * 0.5; // 50% výšky obrazovky
+
     return MenuAnchor(
       controller: _menuController,
       onOpen: () {
         if (_menuController != null && widget.onControllerCreated != null) {
           widget.onControllerCreated!(_menuController!);
         }
+        widget.onOpen?.call();
+      },
+      onClose: () {
+        widget.onClose?.call();
       },
       style: MenuStyle(
         backgroundColor: WidgetStateProperty.all(
           Colors.black.withValues(alpha: 0.9),
         ),
         elevation: WidgetStateProperty.all(8),
-        padding: WidgetStateProperty.all(
-          const EdgeInsets.symmetric(vertical: 8),
+        padding: WidgetStateProperty.all(EdgeInsets.zero),
+        maximumSize: WidgetStateProperty.all(
+          Size(double.infinity, maxMenuHeight),
         ),
       ),
       builder:
@@ -118,12 +130,82 @@ class VeloxonMenuItem<T> {
   const VeloxonMenuItem({required this.label, required this.value});
 }
 
+/// Menu s ikonou místo textu (pro settings atd.)
+class VeloxonIconMenuAnchor extends StatefulWidget {
+  final IconData icon;
+  final List<Widget> menuChildren;
+  final ValueChanged<MenuController>? onControllerCreated;
+  final VoidCallback? onOpen;
+  final VoidCallback? onClose;
+
+  const VeloxonIconMenuAnchor({
+    super.key,
+    required this.icon,
+    required this.menuChildren,
+    this.onControllerCreated,
+    this.onOpen,
+    this.onClose,
+  });
+
+  @override
+  State<VeloxonIconMenuAnchor> createState() => _VeloxonIconMenuAnchorState();
+}
+
+class _VeloxonIconMenuAnchorState extends State<VeloxonIconMenuAnchor> {
+  MenuController? _menuController;
+
+  @override
+  Widget build(BuildContext context) {
+    final screenHeight = MediaQuery.of(context).size.height;
+    final maxMenuHeight = screenHeight * 0.5;
+
+    return MenuAnchor(
+      controller: _menuController,
+      onOpen: () {
+        if (_menuController != null && widget.onControllerCreated != null) {
+          widget.onControllerCreated!(_menuController!);
+        }
+        widget.onOpen?.call();
+      },
+      onClose: () {
+        widget.onClose?.call();
+      },
+      style: MenuStyle(
+        backgroundColor: WidgetStateProperty.all(
+          Colors.black.withValues(alpha: 0.9),
+        ),
+        elevation: WidgetStateProperty.all(8),
+        padding: WidgetStateProperty.all(EdgeInsets.zero),
+        maximumSize: WidgetStateProperty.all(
+          Size(double.infinity, maxMenuHeight),
+        ),
+      ),
+      builder: (context, controller, child) {
+        _menuController ??= controller;
+        return IconButton(
+          onPressed: () {
+            if (controller.isOpen) {
+              controller.close();
+            } else {
+              controller.open();
+            }
+          },
+          icon: Icon(widget.icon, color: Colors.white),
+        );
+      },
+      menuChildren: widget.menuChildren,
+    );
+  }
+}
+
 /// Menu s podporou submenu (otevírá se vpravo)
 class VeloxonSubmenuAnchor extends StatefulWidget {
   final String label;
   final IconData? icon;
   final List<Widget> menuChildren;
   final ValueChanged<MenuController>? onControllerCreated;
+  final VoidCallback? onOpen;
+  final VoidCallback? onClose;
 
   const VeloxonSubmenuAnchor({
     super.key,
@@ -131,6 +213,8 @@ class VeloxonSubmenuAnchor extends StatefulWidget {
     this.icon,
     required this.menuChildren,
     this.onControllerCreated,
+    this.onOpen,
+    this.onClose,
   });
 
   @override
@@ -142,12 +226,19 @@ class _VeloxonSubmenuAnchorState extends State<VeloxonSubmenuAnchor> {
 
   @override
   Widget build(BuildContext context) {
+    final screenHeight = MediaQuery.of(context).size.height;
+    final maxMenuHeight = screenHeight * 0.5; // 50% výšky obrazovky
+
     return SubmenuButton(
       controller: _menuController,
       onOpen: () {
         if (_menuController != null && widget.onControllerCreated != null) {
           widget.onControllerCreated!(_menuController!);
         }
+        widget.onOpen?.call();
+      },
+      onClose: () {
+        widget.onClose?.call();
       },
       style: MenuItemButton.styleFrom(
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
@@ -157,8 +248,9 @@ class _VeloxonSubmenuAnchorState extends State<VeloxonSubmenuAnchor> {
           Colors.black.withValues(alpha: 0.9),
         ),
         elevation: WidgetStateProperty.all(8),
-        padding: WidgetStateProperty.all(
-          const EdgeInsets.symmetric(vertical: 8),
+        padding: WidgetStateProperty.all(EdgeInsets.zero),
+        maximumSize: WidgetStateProperty.all(
+          Size(double.infinity, maxMenuHeight),
         ),
       ),
       alignmentOffset: const Offset(0, 0),
