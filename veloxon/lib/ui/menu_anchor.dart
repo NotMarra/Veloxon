@@ -117,3 +117,69 @@ class VeloxonMenuItem<T> {
 
   const VeloxonMenuItem({required this.label, required this.value});
 }
+
+/// Menu s podporou submenu (otevírá se vpravo)
+class VeloxonSubmenuAnchor extends StatefulWidget {
+  final String label;
+  final IconData? icon;
+  final List<Widget> menuChildren;
+  final ValueChanged<MenuController>? onControllerCreated;
+
+  const VeloxonSubmenuAnchor({
+    super.key,
+    required this.label,
+    this.icon,
+    required this.menuChildren,
+    this.onControllerCreated,
+  });
+
+  @override
+  State<VeloxonSubmenuAnchor> createState() => _VeloxonSubmenuAnchorState();
+}
+
+class _VeloxonSubmenuAnchorState extends State<VeloxonSubmenuAnchor> {
+  MenuController? _menuController;
+
+  @override
+  Widget build(BuildContext context) {
+    return SubmenuButton(
+      controller: _menuController,
+      onOpen: () {
+        if (_menuController != null && widget.onControllerCreated != null) {
+          widget.onControllerCreated!(_menuController!);
+        }
+      },
+      style: MenuItemButton.styleFrom(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+      ),
+      menuStyle: MenuStyle(
+        backgroundColor: WidgetStateProperty.all(
+          Colors.black.withValues(alpha: 0.9),
+        ),
+        elevation: WidgetStateProperty.all(8),
+        padding: WidgetStateProperty.all(
+          const EdgeInsets.symmetric(vertical: 8),
+        ),
+      ),
+      alignmentOffset: const Offset(0, 0),
+      menuChildren: widget.menuChildren,
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          if (widget.icon != null) ...[
+            Icon(widget.icon, color: Colors.white, size: 18),
+            const SizedBox(width: 12),
+          ] else
+            const SizedBox(width: 18),
+          Expanded(
+            child: Text(
+              widget.label,
+              style: const TextStyle(color: Colors.white),
+            ),
+          ),
+          const Icon(Icons.chevron_right, color: Colors.white, size: 18),
+        ],
+      ),
+    );
+  }
+}

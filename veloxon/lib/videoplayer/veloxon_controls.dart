@@ -24,17 +24,26 @@ class _VeloxonPlayerState extends State<VeloxonPlayer> {
 
   void _restartHideTimer() {
     _hideTimer?.cancel();
-    _isControlsVisible = true;
-    _hideCursor = false;
+
+    if (!_isControlsVisible) {
+      setState(() {
+        _isControlsVisible = true;
+        _hideCursor = false;
+      });
+    }
 
     _hideTimer = Timer(const Duration(seconds: 3), () {
-      setState(() {
-        _isControlsVisible = false;
-        _hideCursor = true;
-      });
+      if (mounted) {
+        setState(() {
+          _isControlsVisible = false;
+          _hideCursor = true;
+        });
+      }
     });
+  }
 
-    setState(() {});
+  void _stopHideTimer() {
+    _hideTimer?.cancel();
   }
 
   @override
@@ -55,7 +64,8 @@ class _VeloxonPlayerState extends State<VeloxonPlayer> {
       child: MouseRegion(
         onHover: (_) => _restartHideTimer(),
         onEnter: (_) => _restartHideTimer(),
-        onExit: (_) => _isControlsVisible = false,
+        onExit: (_) =>
+            _stopHideTimer(), // Pouze zastaví timer, neskryje controls
         cursor: _hideCursor
             ? SystemMouseCursors.none
             : SystemMouseCursors.basic,
@@ -67,6 +77,7 @@ class _VeloxonPlayerState extends State<VeloxonPlayer> {
               isVisible: _isControlsVisible,
               onHide: () => setState(() => _isControlsVisible = false),
               restartHideTimer: _restartHideTimer,
+              stopHideTimer: _stopHideTimer,
             ),
           ],
         ),
@@ -80,6 +91,7 @@ class VeloxonControls extends StatefulWidget {
   final bool isVisible;
   final VoidCallback onHide;
   final VoidCallback restartHideTimer;
+  final VoidCallback stopHideTimer;
 
   const VeloxonControls({
     super.key,
@@ -87,6 +99,7 @@ class VeloxonControls extends StatefulWidget {
     required this.isVisible,
     required this.onHide,
     required this.restartHideTimer,
+    required this.stopHideTimer,
   });
 
   @override
@@ -127,6 +140,7 @@ class _VeloxonControlsState extends State<VeloxonControls> {
                 VeloxonBottomBar(
                   player: player,
                   restartHideTimer: widget.restartHideTimer,
+                  stopHideTimer: widget.stopHideTimer,
                   onFullscreenToggle: _toggleFullscreen,
                   isFullscreen: _isFullscreen,
                   isControlsVisible: widget.isVisible,

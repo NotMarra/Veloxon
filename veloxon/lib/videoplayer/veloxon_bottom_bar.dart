@@ -7,6 +7,7 @@ import 'package:veloxon/ui/menu_anchor.dart';
 class VeloxonBottomBar extends StatefulWidget {
   final Player player;
   final VoidCallback restartHideTimer;
+  final VoidCallback stopHideTimer;
   final VoidCallback onFullscreenToggle;
   final bool isFullscreen;
   final bool isControlsVisible;
@@ -15,6 +16,7 @@ class VeloxonBottomBar extends StatefulWidget {
     super.key,
     required this.player,
     required this.restartHideTimer,
+    required this.stopHideTimer,
     required this.onFullscreenToggle,
     required this.isFullscreen,
     required this.isControlsVisible,
@@ -27,6 +29,7 @@ class VeloxonBottomBar extends StatefulWidget {
 class _VeloxonBottomBarState extends State<VeloxonBottomBar> {
   double _previousVolume = 1.0;
   MenuController? _speedMenuController;
+  MenuController? _settingsMenuController;
 
   @override
   void didUpdateWidget(VeloxonBottomBar oldWidget) {
@@ -35,6 +38,9 @@ class _VeloxonBottomBarState extends State<VeloxonBottomBar> {
     if (oldWidget.isControlsVisible && !widget.isControlsVisible) {
       if (_speedMenuController != null && _speedMenuController!.isOpen) {
         _speedMenuController!.close();
+      }
+      if (_settingsMenuController != null && _settingsMenuController!.isOpen) {
+        _settingsMenuController!.close();
       }
     }
   }
@@ -140,10 +146,7 @@ class _VeloxonBottomBarState extends State<VeloxonBottomBar> {
         _buildVolumeControl(),
         const Spacer(),
         _buildSpeedControl(),
-        IconButton(
-          onPressed: null, // TODO: settings
-          icon: const Icon(LucideIcons.settings, color: Colors.white),
-        ),
+        _buildSettingsMenu(),
         IconButton(
           onPressed: widget.onFullscreenToggle,
           icon: Icon(
@@ -293,6 +296,238 @@ class _VeloxonBottomBarState extends State<VeloxonBottomBar> {
           },
           onControllerCreated: (controller) {
             _speedMenuController = controller;
+          },
+        );
+      },
+    );
+  }
+
+  Widget _buildSettingsMenu() {
+    return MenuAnchor(
+      controller: _settingsMenuController,
+      onOpen: () {
+        // Zastavit hide timer když se menu otevře
+        widget.stopHideTimer();
+      },
+      onClose: () {
+        // Restartovat hide timer když se menu zavře
+        widget.restartHideTimer();
+      },
+      style: MenuStyle(
+        backgroundColor: WidgetStateProperty.all(
+          Colors.black.withValues(alpha: 0.9),
+        ),
+        elevation: WidgetStateProperty.all(8),
+        padding: WidgetStateProperty.all(
+          const EdgeInsets.symmetric(vertical: 8),
+        ),
+      ),
+      builder: (context, controller, child) {
+        _settingsMenuController ??= controller;
+        return IconButton(
+          onPressed: () {
+            if (controller.isOpen) {
+              controller.close();
+            } else {
+              controller.open();
+            }
+          },
+          icon: const Icon(LucideIcons.settings, color: Colors.white),
+        );
+      },
+      menuChildren: [_buildAudioTrackSubmenu(), _buildSubtitleSubmenu()],
+    );
+  }
+
+  Widget _buildAudioTrackSubmenu() {
+    return StreamBuilder<Track>(
+      stream: widget.player.stream.track,
+      builder: (context, snapshot) {
+        final currentTrack = snapshot.data?.audio ?? AudioTrack.auto();
+
+        return StreamBuilder<Tracks>(
+          stream: widget.player.stream.tracks,
+          builder: (context, tracksSnapshot) {
+            final tracks = tracksSnapshot.data;
+            final audioTracks = tracks?.audio ?? [];
+
+            return VeloxonSubmenuAnchor(
+              label: 'Audio Track',
+              icon: LucideIcons.audioLines,
+              menuChildren: [
+                // Auto option
+                MenuItemButton(
+                  onPressed: () {
+                    widget.player.setAudioTrack(AudioTrack.auto());
+                  },
+                  style: MenuItemButton.styleFrom(
+                    backgroundColor: currentTrack.id == 'auto'
+                        ? Colors.white.withValues(alpha: 0.1)
+                        : Colors.transparent,
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 16,
+                      vertical: 12,
+                    ),
+                  ),
+                  leadingIcon: currentTrack.id == 'auto'
+                      ? const Icon(Icons.check, color: Colors.white, size: 18)
+                      : const SizedBox(width: 18),
+                  child: Text(
+                    'Auto',
+                    style: TextStyle(
+                      color: Colors.white,
+                      fontWeight: currentTrack.id == 'auto'
+                          ? FontWeight.bold
+                          : FontWeight.normal,
+                    ),
+                  ),
+                ),
+                // Available audio tracks
+                ...audioTracks.map((track) {
+                  final isSelected = currentTrack.id == track.id;
+                  final label =
+                      track.title ?? track.language ?? 'Track ${track.id}';
+
+                  return MenuItemButton(
+                    onPressed: () {
+                      widget.player.setAudioTrack(track);
+                    },
+                    style: MenuItemButton.styleFrom(
+                      backgroundColor: isSelected
+                          ? Colors.white.withValues(alpha: 0.1)
+                          : Colors.transparent,
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 16,
+                        vertical: 12,
+                      ),
+                    ),
+                    leadingIcon: isSelected
+                        ? const Icon(Icons.check, color: Colors.white, size: 18)
+                        : const SizedBox(width: 18),
+                    child: Text(
+                      label,
+                      style: TextStyle(
+                        color: Colors.white,
+                        fontWeight: isSelected
+                            ? FontWeight.bold
+                            : FontWeight.normal,
+                      ),
+                    ),
+                  );
+                }),
+              ],
+            );
+          },
+        );
+      },
+    );
+  }
+
+  Widget _buildSubtitleSubmenu() {
+    return StreamBuilder<Track>(
+      stream: widget.player.stream.track,
+      builder: (context, snapshot) {
+        final currentTrack = snapshot.data?.subtitle ?? SubtitleTrack.no();
+
+        return StreamBuilder<Tracks>(
+          stream: widget.player.stream.tracks,
+          builder: (context, tracksSnapshot) {
+            final tracks = tracksSnapshot.data;
+            final subtitleTracks = tracks?.subtitle ?? [];
+
+            return VeloxonSubmenuAnchor(
+              label: 'Subtitles',
+              icon: LucideIcons.captions,
+              menuChildren: [
+                // No subtitles option
+                MenuItemButton(
+                  onPressed: () {
+                    widget.player.setSubtitleTrack(SubtitleTrack.no());
+                  },
+                  style: MenuItemButton.styleFrom(
+                    backgroundColor: currentTrack.id == 'no'
+                        ? Colors.white.withValues(alpha: 0.1)
+                        : Colors.transparent,
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 16,
+                      vertical: 12,
+                    ),
+                  ),
+                  leadingIcon: currentTrack.id == 'no'
+                      ? const Icon(Icons.check, color: Colors.white, size: 18)
+                      : const SizedBox(width: 18),
+                  child: Text(
+                    'Off',
+                    style: TextStyle(
+                      color: Colors.white,
+                      fontWeight: currentTrack.id == 'no'
+                          ? FontWeight.bold
+                          : FontWeight.normal,
+                    ),
+                  ),
+                ),
+                // Auto option
+                MenuItemButton(
+                  onPressed: () {
+                    widget.player.setSubtitleTrack(SubtitleTrack.auto());
+                  },
+                  style: MenuItemButton.styleFrom(
+                    backgroundColor: currentTrack.id == 'auto'
+                        ? Colors.white.withValues(alpha: 0.1)
+                        : Colors.transparent,
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 16,
+                      vertical: 12,
+                    ),
+                  ),
+                  leadingIcon: currentTrack.id == 'auto'
+                      ? const Icon(Icons.check, color: Colors.white, size: 18)
+                      : const SizedBox(width: 18),
+                  child: Text(
+                    'Auto',
+                    style: TextStyle(
+                      color: Colors.white,
+                      fontWeight: currentTrack.id == 'auto'
+                          ? FontWeight.bold
+                          : FontWeight.normal,
+                    ),
+                  ),
+                ),
+                // Available subtitle tracks
+                ...subtitleTracks.map((track) {
+                  final isSelected = currentTrack.id == track.id;
+                  final label =
+                      track.title ?? track.language ?? 'Track ${track.id}';
+
+                  return MenuItemButton(
+                    onPressed: () {
+                      widget.player.setSubtitleTrack(track);
+                    },
+                    style: MenuItemButton.styleFrom(
+                      backgroundColor: isSelected
+                          ? Colors.white.withValues(alpha: 0.1)
+                          : Colors.transparent,
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 16,
+                        vertical: 12,
+                      ),
+                    ),
+                    leadingIcon: isSelected
+                        ? const Icon(Icons.check, color: Colors.white, size: 18)
+                        : const SizedBox(width: 18),
+                    child: Text(
+                      label,
+                      style: TextStyle(
+                        color: Colors.white,
+                        fontWeight: isSelected
+                            ? FontWeight.bold
+                            : FontWeight.normal,
+                      ),
+                    ),
+                  );
+                }),
+              ],
+            );
           },
         );
       },
