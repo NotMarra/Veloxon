@@ -144,7 +144,6 @@ class _VeloxonPlayerState extends State<VeloxonPlayer> {
       final assFile = await _findAssSubtitleFile(mediaPath, track);
 
       if (assFile == null || !await assFile.exists()) {
-        print('ASS file not found for track: ${track.title}');
         return null;
       }
 
@@ -153,11 +152,9 @@ class _VeloxonPlayerState extends State<VeloxonPlayer> {
 
       // Parse styling
       final assStyle = AssParser.parseStyle(assContent);
-      print('ASS styling loaded from: ${assFile.path}');
 
       return assStyle;
     } catch (e) {
-      print('Error loading ASS style: $e');
       return null;
     }
   }
