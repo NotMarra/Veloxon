@@ -33,15 +33,14 @@ class _VolumeControlState extends State<VolumeControl> {
           children: [
             IconButton(
               onPressed: () {
-                setState(() {
-                  if (volume > 0) {
+                if (volume > 0) {
+                  setState(() {
                     _previousVolume = volume;
-                    volume = 0.0;
-                  } else {
-                    volume = _previousVolume;
-                  }
-                  widget.player.setVolume(volume * 100);
-                });
+                  });
+                  widget.player.setVolume(0);
+                } else {
+                  widget.player.setVolume(_previousVolume * 100);
+                }
               },
               icon: Icon(
                 volume > 0 ? LucideIcons.volume2 : LucideIcons.volumeX,
@@ -83,14 +82,13 @@ class _VolumeControlState extends State<VolumeControl> {
                   child: Slider(
                     value: volume.clamp(0.0, 1.0),
                     onChanged: (newValue) {
-                      setState(() {
-                        widget.restartHideTimer();
-                        volume = newValue;
-                        if (newValue > 0) {
+                      widget.restartHideTimer();
+                      if (newValue > 0) {
+                        setState(() {
                           _previousVolume = newValue;
-                        }
-                        widget.player.setVolume(volume * 100);
-                      });
+                        });
+                      }
+                      widget.player.setVolume(newValue * 100);
                     },
                   ),
                 ),
