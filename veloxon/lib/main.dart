@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:media_kit/media_kit.dart'; // Provides [Player], [Media], [Playlist] etc.
 import 'package:media_kit_video/media_kit_video.dart';
-import 'package:veloxon/videoplayer/veloxon_controls.dart';
+import 'package:veloxon/videoplayer/veloxon_player.dart';
 import 'package:window_manager/window_manager.dart'; // Provides [VideoController] & [Video] etc.
 
 void main() async {
