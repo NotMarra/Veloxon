@@ -59,7 +59,7 @@ class AssParser {
         return Color.fromARGB(aa, rr, gg, bb);
       }
     } catch (e) {
-      print('Error parsing ASS color: $e');
+      debugPrint('Error parsing ASS color: $e');
     }
 
     return Colors.white;
