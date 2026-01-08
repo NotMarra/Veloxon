@@ -6,7 +6,6 @@ import 'package:media_kit/media_kit.dart';
 import 'package:media_kit_video/media_kit_video.dart';
 import 'package:veloxon/utils/video_file.dart';
 import 'package:veloxon/utils/video_scanner.dart';
-import 'package:path/path.dart' as path;
 import 'package:veloxon/videoplayer/veloxon_player.dart';
 
 class VideoFinder extends StatefulWidget {
@@ -18,7 +17,7 @@ class VideoFinder extends StatefulWidget {
 
 class _VideoFinderState extends State<VideoFinder> {
   final VideoScanner _scanner = VideoScanner();
-  List<VideoFile> _allVideos = [];
+  final List<VideoFile> _allVideos = [];
   List<VideoFile> _filteredVideos = [];
   bool _isScanning = false;
   String _searchQuery = '';
@@ -74,8 +73,9 @@ class _VideoFinderState extends State<VideoFinder> {
   String _formatSize(int bytes) {
     if (bytes < 1024) return '$bytes B';
     if (bytes < 1024 * 1024) return '${(bytes / 1024).toStringAsFixed(1)} KB';
-    if (bytes < 1024 * 1024 * 1024)
+    if (bytes < 1024 * 1024 * 1024) {
       return '${(bytes / (1024 * 1024)).toStringAsFixed(1)} MB';
+    }
     return '${(bytes / (1024 * 1024 * 1024)).toStringAsFixed(2)} GB';
   }
 
