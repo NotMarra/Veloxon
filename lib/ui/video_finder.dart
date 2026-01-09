@@ -1,12 +1,18 @@
 import 'dart:io';
+import 'dart:async';
 
 import 'package:flutter/material.dart';
-import 'package:lucide_icons_flutter/lucide_icons.dart';
+import 'package:get_video_thumbnail/get_video_thumbnail.dart';
+import 'package:get_video_thumbnail/index.dart';
 import 'package:media_kit/media_kit.dart';
 import 'package:media_kit_video/media_kit_video.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+import 'package:veloxon/ui/settings.dart';
 import 'package:veloxon/utils/video_file.dart';
 import 'package:veloxon/utils/video_scanner.dart';
 import 'package:veloxon/videoplayer/veloxon_player.dart';
+import 'package:path_provider/path_provider.dart';
+import 'package:path/path.dart' as path;
 
 class VideoFinder extends StatefulWidget {
   const VideoFinder({super.key});
@@ -18,10 +24,17 @@ class VideoFinder extends StatefulWidget {
 class _VideoFinderState extends State<VideoFinder> {
   final VideoScanner _scanner = VideoScanner();
   final List<VideoFile> _allVideos = [];
-  List<VideoFile> _filteredVideos = [];
+  List<dynamic> _filteredItems = [];
   bool _isScanning = false;
   String _searchQuery = '';
   String _selectedExtension = 'All';
+  final Map<String, String?> _thumbnailCache = {};
+
+  String? _currentFolder;
+  final List<String> _folderHistory = [];
+  final List<String> _thumbnailQueue = [];
+  bool _isGeneratingThumbnails = false;
+
   final List<String> _extensions = [
     'All',
     '.mp4',
@@ -37,261 +50,346 @@ class _VideoFinderState extends State<VideoFinder> {
     _startScan();
   }
 
+  // --- LOGIKA SKENOVÁNÍ ---
+
   Future<void> _startScan() async {
+    if (!mounted) return;
     setState(() {
       _isScanning = true;
       _allVideos.clear();
-      _filteredVideos.clear();
+      _filteredItems.clear();
+      _thumbnailQueue.clear();
+      _currentFolder = null;
+      _folderHistory.clear();
     });
 
-    await for (final video in _scanner.scanAllDrives()) {
-      setState(() {
-        _allVideos.add(video);
-        _applyFilters();
-      });
+    try {
+      await for (final video in _scanner.scanSavedPaths()) {
+        if (mounted) {
+          setState(() {
+            _allVideos.add(video);
+            _applyFilters();
+          });
+          _thumbnailQueue.add(video.path);
+        }
+      }
+    } finally {
+      if (mounted) {
+        setState(() => _isScanning = false);
+        _processThumbnailQueue();
+      }
     }
-
-    setState(() {
-      _isScanning = false;
-    });
   }
 
   void _applyFilters() {
-    _filteredVideos = _allVideos.where((video) {
+    var filtered = _allVideos.where((video) {
       final matchesSearch =
           _searchQuery.isEmpty ||
-          video.name.toLowerCase().contains(_searchQuery.toLowerCase()) ||
-          video.path.toLowerCase().contains(_searchQuery.toLowerCase());
-
+          video.name.toLowerCase().contains(_searchQuery.toLowerCase());
       final matchesExtension =
           _selectedExtension == 'All' || video.extension == _selectedExtension;
-
       return matchesSearch && matchesExtension;
     }).toList();
+
+    List<dynamic> newItems = [];
+
+    if (_currentFolder == null) {
+      // Režim ROOT: Seskupení do složek
+      final Map<String, List<VideoFile>> groups = {};
+      for (var v in filtered) {
+        final dirPath = path.dirname(v.path);
+        groups.putIfAbsent(dirPath, () => []).add(v);
+      }
+
+      newItems = groups.entries
+          .map(
+            (e) => FolderItem(
+              name: path.basename(e.key),
+              path: e.key,
+              videoCount: e.value.length,
+            ),
+          )
+          .toList();
+    } else {
+      // Režim SLOŽKA: Jen videa v této složce
+      newItems = filtered
+          .where((v) => path.dirname(v.path) == _currentFolder)
+          .toList();
+    }
+
+    setState(() {
+      _filteredItems = newItems;
+    });
+  }
+
+  // --- NAVIGACE ---
+
+  void _openFolder(FolderItem folder) {
+    setState(() {
+      if (_currentFolder != null) _folderHistory.add(_currentFolder!);
+      _currentFolder = folder.path;
+      _applyFilters();
+    });
+  }
+
+  void _goBack() {
+    setState(() {
+      if (_folderHistory.isNotEmpty) {
+        _currentFolder = _folderHistory.removeLast();
+      } else {
+        _currentFolder = null;
+      }
+      _applyFilters();
+    });
+  }
+
+  // --- MINIATURY ---
+
+  Future<void> _processThumbnailQueue() async {
+    if (_isGeneratingThumbnails) return;
+    _isGeneratingThumbnails = true;
+
+    while (_thumbnailQueue.isNotEmpty) {
+      final videoPath = _thumbnailQueue.removeAt(0);
+      await _generateThumbnail(videoPath);
+      await Future.delayed(const Duration(milliseconds: 50));
+    }
+
+    _isGeneratingThumbnails = false;
+  }
+
+  Future<void> _generateThumbnail(String videoPath) async {
+    if (_thumbnailCache.containsKey(videoPath)) return;
+
+    try {
+      final tempDir = await getTemporaryDirectory();
+      final XFile? thumb = await VideoThumbnail.thumbnailFile(
+        video: videoPath,
+        thumbnailPath: tempDir.path,
+        imageFormat: ImageFormat.JPEG,
+        maxWidth: 300,
+        quality: 75,
+      );
+
+      if (thumb != null && mounted) {
+        setState(() => _thumbnailCache[videoPath] = thumb.path);
+      }
+    } catch (e) {
+      if (mounted) setState(() => _thumbnailCache[videoPath] = null);
+    }
   }
 
   String _formatSize(int bytes) {
     if (bytes < 1024) return '$bytes B';
     if (bytes < 1024 * 1024) return '${(bytes / 1024).toStringAsFixed(1)} KB';
-    if (bytes < 1024 * 1024 * 1024) {
-      return '${(bytes / (1024 * 1024)).toStringAsFixed(1)} MB';
-    }
-    return '${(bytes / (1024 * 1024 * 1024)).toStringAsFixed(2)} GB';
+    return '${(bytes / (1024 * 1024)).toStringAsFixed(1)} MB';
   }
 
-  void _playVideo(VideoFile video) {
-    Navigator.push(
-      context,
-      MaterialPageRoute(
-        builder: (context) => VideoPlayerScreen(videoPath: video.path),
-      ),
-    );
-  }
+  // --- UI BUILDER ---
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: Text('Veloxon'),
+        title: const Text('Veloxon'),
+        leading: _currentFolder != null
+            ? IconButton(icon: const Icon(Icons.arrow_back), onPressed: _goBack)
+            : null,
         actions: [
           IconButton(
+            icon: const Icon(Icons.settings),
+            onPressed: () async {
+              await Navigator.push(
+                context,
+                MaterialPageRoute(builder: (context) => const SettingsPage()),
+              );
+              _startScan();
+            },
+          ),
+          IconButton(
             onPressed: _isScanning ? null : _startScan,
-            icon: Icon(LucideIcons.refreshCcw),
+            icon: const Icon(Icons.refresh),
           ),
         ],
       ),
       body: Column(
         children: [
-          Container(
-            padding: EdgeInsets.all(16),
-            child: Column(
-              children: [
-                TextField(
-                  decoration: InputDecoration(hintText: 'Search videos...'),
-                  onChanged: (value) {
-                    setState(() {
-                      _searchQuery = value;
-                      _applyFilters();
-                    });
-                  },
-                ),
-                SizedBox(height: 12),
-                Row(
-                  children: [
-                    const Icon(Icons.filter_list, size: 20),
-                    const SizedBox(width: 8),
-                    const Text('Format:'),
-                    const SizedBox(width: 8),
-                    Expanded(
-                      child: Wrap(
-                        spacing: 8,
-                        children: _extensions.map((ext) {
-                          return FilterChip(
-                            label: Text(ext),
-                            selected: _selectedExtension == ext,
-                            onSelected: (selected) {
-                              setState(() {
-                                _selectedExtension = ext;
-                                _applyFilters();
-                              });
-                            },
-                          );
-                        }).toList(),
-                      ),
-                    ),
-                  ],
-                ),
-              ],
-            ),
-          ),
-
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-            color: Color(0xff0090fc),
-            child: Row(
-              children: [
-                if (_isScanning) ...[
-                  const SizedBox(
-                    width: 16,
-                    height: 16,
-                    child: CircularProgressIndicator(strokeWidth: 2),
-                  ),
-                  const SizedBox(width: 8),
-                  const Text('Scanning...'),
-                ] else ...[
-                  const Icon(
-                    Icons.check_circle,
-                    color: Color.fromARGB(255, 0, 255, 8),
-                    size: 20,
-                  ),
-                  const SizedBox(width: 8),
-                  Text('Found: ${_filteredVideos.length} videos'),
-                ],
-                const Spacer(),
-                Text(
-                  'Sum: ${_allVideos.length}',
-                  style: TextStyle(color: Colors.white),
-                ),
-              ],
-            ),
-          ),
-
-          Expanded(
-            child: _filteredVideos.isEmpty && !_isScanning
-                ? const Center(
-                    child: Column(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        Icon(Icons.video_library, size: 64, color: Colors.grey),
-                        SizedBox(height: 16),
-                        Text(
-                          'No videos...',
-                          style: TextStyle(fontSize: 18, color: Colors.grey),
-                        ),
-                      ],
-                    ),
-                  )
-                : ListView.builder(
-                    itemCount: _filteredVideos.length,
-                    itemBuilder: (context, index) {
-                      final video = _filteredVideos[index];
-                      return Card(
-                        margin: const EdgeInsets.symmetric(
-                          horizontal: 16,
-                          vertical: 4,
-                        ),
-                        child: ListTile(
-                          leading: CircleAvatar(
-                            backgroundColor: Colors.deepPurple[700],
-                            child: const Icon(
-                              Icons.play_circle_filled,
-                              color: Colors.white,
-                            ),
-                          ),
-                          title: Text(
-                            video.name,
-                            style: const TextStyle(fontWeight: FontWeight.bold),
-                          ),
-                          subtitle: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              const SizedBox(height: 4),
-                              Text(
-                                video.path,
-                                style: TextStyle(
-                                  fontSize: 12,
-                                  color: Colors.grey[400],
-                                ),
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                              ),
-                              const SizedBox(height: 2),
-                              Row(
-                                children: [
-                                  Icon(
-                                    Icons.storage,
-                                    size: 12,
-                                    color: Colors.grey[400],
-                                  ),
-                                  const SizedBox(width: 4),
-                                  Text(
-                                    _formatSize(video.size),
-                                    style: TextStyle(
-                                      fontSize: 12,
-                                      color: Colors.grey[400],
-                                    ),
-                                  ),
-                                  const SizedBox(width: 12),
-                                  Container(
-                                    padding: const EdgeInsets.symmetric(
-                                      horizontal: 6,
-                                      vertical: 2,
-                                    ),
-                                    decoration: BoxDecoration(
-                                      color: Colors.blue[900],
-                                      borderRadius: BorderRadius.circular(4),
-                                    ),
-                                    child: Text(
-                                      video.extension,
-                                      style: const TextStyle(
-                                        fontSize: 10,
-                                        color: Colors.white,
-                                        fontWeight: FontWeight.bold,
-                                      ),
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            ],
-                          ),
-                          trailing: IconButton(
-                            icon: const Icon(Icons.folder_open),
-                            onPressed: () {
-                              final dir = Directory(video.path).parent;
-                              if (Platform.isWindows) {
-                                Process.run('explorer', [dir.path]);
-                              } else if (Platform.isMacOS) {
-                                Process.run('open', [dir.path]);
-                              } else {
-                                Process.run('xdg-open', [dir.path]);
-                              }
-                            },
-                          ),
-                          onTap: () => _playVideo(video),
-                        ),
-                      );
-                    },
-                  ),
-          ),
+          _buildSearchBar(),
+          if (_currentFolder != null) _buildBreadcrumb(),
+          _buildStatusBar(),
+          Expanded(child: _buildGrid()),
         ],
+      ),
+    );
+  }
+
+  Widget _buildSearchBar() {
+    return Padding(
+      padding: const EdgeInsets.all(16.0),
+      child: TextField(
+        decoration: const InputDecoration(
+          hintText: 'Search...',
+          prefixIcon: Icon(Icons.search),
+        ),
+        onChanged: (val) {
+          setState(() {
+            _searchQuery = val;
+            _applyFilters();
+          });
+        },
+      ),
+    );
+  }
+
+  Widget _buildBreadcrumb() {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(8),
+      color: Colors.black26,
+      child: Text(
+        "Složka: ${path.basename(_currentFolder!)}",
+        style: const TextStyle(fontWeight: FontWeight.bold),
+      ),
+    );
+  }
+
+  Widget _buildStatusBar() {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+      color: const Color(0xff0090fc),
+      child: Row(
+        children: [
+          Text(
+            'Položek: ${_filteredItems.length}',
+            style: const TextStyle(color: Colors.white),
+          ),
+          const Spacer(),
+          if (_isScanning)
+            const SizedBox(
+              width: 16,
+              height: 16,
+              child: CircularProgressIndicator(
+                strokeWidth: 2,
+                color: Colors.white,
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildGrid() {
+    return GridView.builder(
+      padding: const EdgeInsets.all(16),
+      gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+        crossAxisCount: 4,
+        childAspectRatio: 1.1,
+        crossAxisSpacing: 10,
+        mainAxisSpacing: 10,
+      ),
+      itemCount: _filteredItems.length,
+      itemBuilder: (context, index) {
+        final item = _filteredItems[index];
+        if (item is FolderItem) return _buildFolderCard(item);
+        if (item is VideoFile) return _buildVideoCard(item);
+        return const SizedBox.shrink();
+      },
+    );
+  }
+
+  Widget _buildFolderCard(FolderItem folder) {
+    return Card(
+      clipBehavior: Clip.antiAlias,
+      child: InkWell(
+        onTap: () => _openFolder(folder),
+        child: Column(
+          children: [
+            const Expanded(
+              child: Center(
+                child: Icon(Icons.folder, size: 64, color: Colors.blue),
+              ),
+            ),
+            Padding(
+              padding: const EdgeInsets.all(8.0),
+              child: Text(
+                folder.name,
+                overflow: TextOverflow.ellipsis,
+                style: const TextStyle(fontWeight: FontWeight.bold),
+              ),
+            ),
+            Text(
+              '${folder.videoCount} videos',
+              style: const TextStyle(fontSize: 10),
+            ),
+            const SizedBox(height: 8),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildVideoCard(VideoFile video) {
+    final thumb = _thumbnailCache[video.path];
+    return Card(
+      clipBehavior: Clip.antiAlias,
+      child: InkWell(
+        onTap: () => Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (context) => VideoPlayerScreen(videoPath: video.path),
+          ),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Expanded(
+              child: thumb != null
+                  ? Image.file(File(thumb), fit: BoxFit.cover)
+                  : Container(
+                      color: Colors.black87,
+                      child: const Icon(Icons.play_circle_outline, size: 48),
+                    ),
+            ),
+            Padding(
+              padding: const EdgeInsets.all(8.0),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    video.name,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(fontSize: 11),
+                  ),
+                  Text(
+                    _formatSize(video.size),
+                    style: const TextStyle(fontSize: 9, color: Colors.grey),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }
 }
 
+// --- POMOCNÉ TŘÍDY (Tyto třídy nesmí chybět!) ---
+
+class FolderItem {
+  final String name;
+  final String path;
+  final int videoCount;
+  FolderItem({
+    required this.name,
+    required this.path,
+    required this.videoCount,
+  });
+}
+
 class VideoPlayerScreen extends StatefulWidget {
   final String videoPath;
-
   const VideoPlayerScreen({super.key, required this.videoPath});
 
   @override
@@ -305,75 +403,7 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen> {
   @override
   void initState() {
     super.initState();
-    debugPrint('=== VideoPlayerScreen initState called ===');
-    _initPlayer();
-    _listenToTracks();
-  }
-
-  void _listenToTracks() {
-    player.stream.tracks.listen((tracks) {
-      debugPrint('=== Tracks Stream Update ===');
-      debugPrint('Audio tracks: ${tracks.audio.length}');
-      for (var track in tracks.audio) {
-        debugPrint(
-          '  - Audio: id=${track.id}, title=${track.title}, lang=${track.language}',
-        );
-      }
-      debugPrint('Subtitle tracks: ${tracks.subtitle.length}');
-      for (var track in tracks.subtitle) {
-        debugPrint(
-          '  - Subtitle: id=${track.id}, title=${track.title}, lang=${track.language}',
-        );
-      }
-      debugPrint('Video tracks: ${tracks.video.length}');
-      for (var track in tracks.video) {
-        debugPrint('  - Video: id=${track.id}, title=${track.title}');
-      }
-    });
-
-    player.stream.track.listen((track) {
-      debugPrint('=== Track Selection Changed ===');
-      debugPrint(
-        'Audio: id=${track.audio.id}, title=${track.audio.title}, lang=${track.audio.language}',
-      );
-      debugPrint(
-        'Subtitle: id=${track.subtitle.id}, title=${track.subtitle.title}, lang=${track.subtitle.language}',
-      );
-      debugPrint('Video: id=${track.video.id}, title=${track.video.title}');
-    });
-  }
-
-  Future<void> _initPlayer() async {
-    debugPrint('=== Opening media file: ${widget.videoPath} ===');
-    // Otevře vybrané video
-    await player.open(Media(widget.videoPath));
-    debugPrint('=== Media file opened ===');
-
-    await Future.delayed(const Duration(seconds: 2));
-    debugPrint('=== After 2 second delay ===');
-
-    try {
-      final tracks = await player.stream.tracks.first;
-      debugPrint('=== Manual Tracks Check ===');
-      debugPrint('Audio tracks: ${tracks.audio.length}');
-      for (var track in tracks.audio) {
-        debugPrint(
-          '  - Audio: id=${track.id}, title=${track.title}, lang=${track.language}',
-        );
-      }
-      debugPrint('Subtitle tracks: ${tracks.subtitle.length}');
-      for (var track in tracks.subtitle) {
-        debugPrint(
-          '  - Subtitle: id=${track.id}, title=${track.title}, lang=${track.language}',
-        );
-      }
-      debugPrint('Video tracks: ${tracks.video.length}');
-      for (var track in tracks.video) {
-        debugPrint('  - Video: id=${track.id}, title=${track.title}');
-      }
-    } catch (e) {
-      debugPrint('Error getting tracks: $e');
-    }
+    player.open(Media(widget.videoPath));
   }
 
   @override
