@@ -12,9 +12,9 @@
   "app": {
     "windows": [
       {
-        "title": "veloxon",
-        "width": 800,
-        "height": 600
+        "title": "Veloxon",
+        "width": 1400,
+        "height": 800
       }
     ],
     "security": {
